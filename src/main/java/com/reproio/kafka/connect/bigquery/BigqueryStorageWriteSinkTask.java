@@ -117,45 +117,69 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
             entry -> {
               var topicPartition = entry.getKey();
               var bigqueryStreamWriter = entry.getValue();
-              bigqueryStreamWriter.waitAllInflightRequests();
-              boolean shouldCommit = false;
-              var appendContexts = getInflightContexts(topicPartition);
-              if (appendContexts.isEmpty()) {
-                return;
-              }
-
-              for (var appendContext : appendContexts) {
-                log.debug("AppendContext: {}", appendContext.getAppendRowsResponse());
-                var corruptedRowOffsets = getCorruptedRowOffsets(topicPartition);
-                corruptedRowOffsets.clear();
-                corruptedRowOffsets.addAll(appendContext.corruptedRowKafkaOffsets());
-                if (appendContext.hasUnretryableError()) {
-                  log.error(
-                      "Unretryable error is occured: {topic={}, from={}, to={}}",
-                      topicPartition.topic(),
-                      appendContext.getFirstKafkaOffset(),
-                      appendContext.getLastKafkaOffset(),
-                      appendContext.getError());
-                }
-                if (appendContext.hasError()) {
-                  log.info("rewind.offsets: {}", currentOffsets);
-                  rewindToAppendContextOffset(currentOffsets, topicPartition, appendContext);
-                  break;
-                }
-                shouldCommit = true;
-              }
-
-              appendContexts.clear();
-
-              if (shouldCommit) {
-                bigqueryStreamWriter.commit();
-                log.info("bigquery.commit.success: {}", topicPartition);
-              } else {
-                bigqueryStreamWriter.reset();
-              }
+              preCommitForTopicPartitionWriter(
+                  currentOffsets, topicPartition, bigqueryStreamWriter);
             });
     log.info("commit.offsets: {}", currentOffsets);
     return currentOffsets;
+  }
+
+  private void preCommitForTopicPartitionWriter(
+      Map<TopicPartition, OffsetAndMetadata> currentOffsets,
+      TopicPartition topicPartition,
+      BigqueryStreamWriter bigqueryStreamWriter) {
+    bigqueryStreamWriter.waitAllInflightRequests();
+
+    boolean shouldCommit = false;
+    var appendContexts = getInflightContexts(topicPartition);
+    if (appendContexts.isEmpty()) {
+      return;
+    }
+
+    for (var appendContext : appendContexts) {
+      if (!preCommitForAppendContext(currentOffsets, topicPartition, appendContext)) {
+        break;
+      }
+      shouldCommit = true;
+    }
+
+    appendContexts.clear();
+
+    if (shouldCommit) {
+      bigqueryStreamWriter.commit();
+      log.info("bigquery.commit.success: {}", topicPartition);
+    } else {
+      bigqueryStreamWriter.reset();
+    }
+  }
+
+  private boolean preCommitForAppendContext(
+      Map<TopicPartition, OffsetAndMetadata> currentOffsets,
+      TopicPartition topicPartition,
+      AppendContext appendContext) {
+    log.debug("AppendContext: {}", appendContext.getAppendRowsResponse());
+    if (appendContext.isAlreadyExists()) {
+      return true;
+    }
+
+    var corruptedRowOffsets = getCorruptedRowOffsets(topicPartition);
+    corruptedRowOffsets.clear();
+    corruptedRowOffsets.addAll(appendContext.corruptedRowKafkaOffsets());
+    if (appendContext.hasUnretryableError()) {
+      log.error(
+          "Unretryable error is occured: {topic={}, from={}, to={}}",
+          topicPartition.topic(),
+          appendContext.getFirstKafkaOffset(),
+          appendContext.getLastKafkaOffset(),
+          appendContext.getError());
+    }
+    if (appendContext.hasError()) {
+      log.info("rewind.offsets: {}", currentOffsets);
+      rewindToAppendContextOffset(currentOffsets, topicPartition, appendContext);
+      return false;
+    }
+
+    return true;
   }
 
   private void rewindToAppendContextOffset(

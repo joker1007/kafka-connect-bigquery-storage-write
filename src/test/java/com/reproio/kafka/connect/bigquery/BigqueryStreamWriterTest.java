@@ -28,7 +28,6 @@ import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.json.JSONArray;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 class BigqueryStreamWriterTest {
 
@@ -81,6 +80,7 @@ class BigqueryStreamWriterTest {
             })
         .thenReturn(Optional.empty());
 
+    assertFalse(writer.isExceedRecordLimit());
     IntStream.rangeClosed(0, 1000)
         .forEach(
             i -> {
@@ -92,7 +92,7 @@ class BigqueryStreamWriterTest {
                   new SinkRecord("topic", 0, Schema.STRING_SCHEMA, "key", valueSchema, struct, i);
               writer.appendRecord(sinkRecord);
             });
-    Mockito.verify(writer).write();
+    assertTrue(writer.isExceedRecordLimit());
   }
 
   @SneakyThrows

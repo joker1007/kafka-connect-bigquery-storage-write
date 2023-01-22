@@ -91,8 +91,6 @@ public class BigqueryStreamWriter implements Closeable {
     @NonNull private final List<Long> errorRecordKafkaOffsets;
     @NonNull private final String streamName;
     private final int writtenWriterStreamOffset;
-    private final long firstKafkaOffset;
-    private final long lastKafkaOffset;
     @Nullable private AppendRowsResponse appendRowsResponse;
     @Nullable private Throwable error;
     private int retryCount;
@@ -106,8 +104,17 @@ public class BigqueryStreamWriter implements Closeable {
             Code.DEADLINE_EXCEEDED,
             Code.UNAVAILABLE);
 
+    public long getFirstKafkaOffset() {
+      return writtenRecordKafkaOffsets.get(0);
+    }
+
+    public long getLastKafkaOffset() {
+      return writtenRecordKafkaOffsets.get(writtenRecordKafkaOffsets.size() - 1);
+    }
+
     public boolean hasError() {
-      return error != null || appendRowsResponse.getRowErrorsCount() > 0;
+      return error != null
+          || (appendRowsResponse != null && appendRowsResponse.getRowErrorsCount() > 0);
     }
 
     public boolean hasUnretryableError() {
@@ -117,6 +124,15 @@ public class BigqueryStreamWriter implements Closeable {
       var storageException = Exceptions.toStorageException(error);
       return storageException == null
           || !RETRIABLE_ERROR_CODES.contains(storageException.getStatus().getCode());
+    }
+
+    public boolean isAlreadyExists() {
+      if (error == null) {
+        return false;
+      }
+      var storageException = Exceptions.toStorageException(error);
+      return storageException != null
+          && storageException.getStatus().getCode() == Code.ALREADY_EXISTS;
     }
 
     public List<Long> corruptedRowKafkaOffsets() {
@@ -161,17 +177,11 @@ public class BigqueryStreamWriter implements Closeable {
     this.currentOffset = 0;
   }
 
-  public Optional<AppendContext> appendRecord(SinkRecord record) {
+  public void appendRecord(SinkRecord record) {
     if (record.value() instanceof Struct) {
       currentBufferChunk.add(record);
     } else {
       log.warn("record is ignored because it is not struct record");
-    }
-
-    if (currentBufferChunk.size() >= BUFFER_CHUNK_RECORD_LIMIT) {
-      return write();
-    } else {
-      return Optional.empty();
     }
   }
 
@@ -217,12 +227,7 @@ public class BigqueryStreamWriter implements Closeable {
       if (newWrittenRecordOffsets.isEmpty()) {
         var appendContext =
             new AppendContext(
-                writtenRecordOffsets,
-                List.of(),
-                streamWriter.getStreamName(),
-                currentOffset,
-                writtenRecordOffsets.get(0),
-                writtenRecordOffsets.get(writtenRecordOffsets.size() - 1));
+                writtenRecordOffsets, List.of(), streamWriter.getStreamName(), currentOffset);
         appendContext.setError(e);
         return Optional.of(appendContext);
       }
@@ -236,12 +241,7 @@ public class BigqueryStreamWriter implements Closeable {
 
     var appendContext =
         new AppendContext(
-            writtenRecordOffsets,
-            errorRecordOffsets,
-            streamWriter.getStreamName(),
-            currentOffset,
-            writtenRecordOffsets.get(0),
-            writtenRecordOffsets.get(writtenRecordOffsets.size() - 1));
+            writtenRecordOffsets, errorRecordOffsets, streamWriter.getStreamName(), currentOffset);
 
     log.debug("Send Payload: {}", appendContext);
     ApiFuture<AppendRowsResponse> future = streamWriter.append(jsonArray, currentOffset);

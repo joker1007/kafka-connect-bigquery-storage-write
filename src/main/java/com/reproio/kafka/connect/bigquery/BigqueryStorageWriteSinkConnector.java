@@ -1,11 +1,14 @@
 package com.reproio.kafka.connect.bigquery;
 
+import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.WriteMode;
 import com.reproio.kafka.connect.bigquery.utils.Version;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.sink.SinkConnector;
 
@@ -40,6 +43,26 @@ public class BigqueryStorageWriteSinkConnector extends SinkConnector {
   @Override
   public ConfigDef config() {
     return BigqueryStreamWriteSinkConfig.getConfig();
+  }
+
+  @Override
+  public Config validate(Map<String, String> connectorConfigs) {
+    Config config = super.validate(connectorConfigs);
+    var writeModeValue = getConfigValue(config, BigqueryStreamWriteSinkConfig.WRITE_MODE_CONFIG);
+    var castedWriteModeValue = (String) writeModeValue.value();
+    try {
+      WriteMode.valueOf(castedWriteModeValue.toUpperCase());
+    } catch (IllegalArgumentException ex) {
+      writeModeValue.addErrorMessage(ex.getMessage());
+    }
+    return config;
+  }
+
+  private ConfigValue getConfigValue(Config config, String configName) {
+    return config.configValues().stream()
+        .filter(value -> value.name().equals(configName))
+        .findFirst()
+        .orElseThrow();
   }
 
   @Override

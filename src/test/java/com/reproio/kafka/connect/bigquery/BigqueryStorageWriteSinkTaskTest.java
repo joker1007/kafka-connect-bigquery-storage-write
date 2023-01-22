@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.AppendContext;
+import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.WriteMode;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +35,9 @@ class BigqueryStorageWriteSinkTaskTest {
           "table",
           "bq_table",
           "keyfile",
-          "/tmp/dummy_key");
+          "/tmp/dummy_key",
+          "write_mode",
+          "pending");
 
   private final Schema valueSchema =
       SchemaBuilder.struct()
@@ -61,7 +64,7 @@ class BigqueryStorageWriteSinkTaskTest {
           .when(
               () ->
                   BigqueryStreamWriter.create(
-                      "bq_project", "bq_dataset", "bq_table", "/tmp/dummy_key"))
+                      "bq_project", "bq_dataset", "bq_table", WriteMode.PENDING, "/tmp/dummy_key"))
           .thenReturn(mockedWriter);
       task.open(topicPartitions);
     }
@@ -70,8 +73,7 @@ class BigqueryStorageWriteSinkTaskTest {
   @Test
   void testStart() {
     var task = new BigqueryStorageWriteSinkTask();
-    var config = VALID_CONFIG;
-    assertDoesNotThrow(() -> task.start(config));
+    assertDoesNotThrow(() -> task.start(VALID_CONFIG));
   }
 
   @Test

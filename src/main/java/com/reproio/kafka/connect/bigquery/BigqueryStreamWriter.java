@@ -44,6 +44,7 @@ import org.json.JSONObject;
 public class BigqueryStreamWriter implements Closeable {
   private final BigQueryWriteClient client;
   private final TableName tableName;
+  private final WriteMode writeMode;
 
   private JsonStreamWriter streamWriter;
 
@@ -54,9 +55,14 @@ public class BigqueryStreamWriter implements Closeable {
 
   private final Phaser inflightRequests = new Phaser(1);
 
+  public enum WriteMode {
+    PENDING,
+    COMMITTED;
+  }
+
   @SneakyThrows
   public static BigqueryStreamWriter create(
-      String project, String dataset, String table, String keyfile) {
+      String project, String dataset, String table, WriteMode writeMode, String keyfile) {
     var keyFileStream = new FileInputStream(keyfile);
     var writeSettings =
         BigQueryWriteSettings.newBuilder()
@@ -64,13 +70,18 @@ public class BigqueryStreamWriter implements Closeable {
                 FixedCredentialsProvider.create(GoogleCredentials.fromStream(keyFileStream)))
             .build();
     var client = BigQueryWriteClient.create(writeSettings);
-    return new BigqueryStreamWriter(project, dataset, table, client);
+    return new BigqueryStreamWriter(project, dataset, table, writeMode, client);
   }
 
   @VisibleForTesting
   public BigqueryStreamWriter(
-      String project, String dataset, String table, BigQueryWriteClient client) {
+      String project,
+      String dataset,
+      String table,
+      WriteMode writeMode,
+      BigQueryWriteClient client) {
     this.tableName = TableName.of(project, dataset, table);
+    this.writeMode = writeMode;
     this.client = client;
   }
 
@@ -160,9 +171,13 @@ public class BigqueryStreamWriter implements Closeable {
   }
 
   @SneakyThrows
-  public void createWriteStream() {
+  private void createWriteStream() {
     log.debug("Create WriteStream");
-    var stream = WriteStream.newBuilder().setType(Type.PENDING).build();
+    var stream =
+        WriteStream.newBuilder()
+            .setType(writeMode == WriteMode.PENDING ? Type.PENDING : Type.COMMITTED)
+            .build();
+
     var createWriteStreamRequest =
         CreateWriteStreamRequest.newBuilder()
             .setParent(tableName.toString())
@@ -302,11 +317,13 @@ public class BigqueryStreamWriter implements Closeable {
   }
 
   public void commit() {
-    finalizeStream();
-    commitStream();
-    log.debug("Clear streamWriter");
-    streamWriter.close();
-    this.streamWriter = null;
+    if (writeMode == WriteMode.PENDING) {
+      finalizeStream();
+      commitStream();
+      log.debug("Clear streamWriter");
+      streamWriter.close();
+      this.streamWriter = null;
+    }
   }
 
   class AppendCompleteCallback implements ApiFutureCallback<AppendRowsResponse> {

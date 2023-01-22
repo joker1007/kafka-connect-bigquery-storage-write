@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,6 +18,7 @@ import com.google.cloud.bigquery.storage.v1.Exceptions.AppendSerializtionError;
 import com.google.cloud.bigquery.storage.v1.FinalizeWriteStreamResponse;
 import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
 import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.AppendContext;
+import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.WriteMode;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,7 +60,9 @@ class BigqueryStreamWriterTest {
   @Test
   void testAppendRecord() {
     this.mockedClient = mock(BigQueryWriteClient.class);
-    var writer = new BigqueryStreamWriter("bq_project", "bq_dataset", "bq_table", mockedClient);
+    var writer =
+        new BigqueryStreamWriter(
+            "bq_project", "bq_dataset", "bq_table", WriteMode.PENDING, mockedClient);
 
     SinkRecord sinkRecord = buildSinkRecord();
     writer.appendRecord(sinkRecord);
@@ -70,7 +74,9 @@ class BigqueryStreamWriterTest {
   void testAppendRecordWith1001Record() {
     this.mockedClient = mock(BigQueryWriteClient.class);
     var writer =
-        spy(new BigqueryStreamWriter("bq_project", "bq_dataset", "bq_table", mockedClient));
+        spy(
+            new BigqueryStreamWriter(
+                "bq_project", "bq_dataset", "bq_table", WriteMode.PENDING, mockedClient));
 
     when(writer.write())
         .then(
@@ -95,11 +101,17 @@ class BigqueryStreamWriterTest {
     assertTrue(writer.isExceedRecordLimit());
   }
 
-  @SneakyThrows
   private BigqueryStreamWriter getMockedWriter() {
+    return getMockedWriter(WriteMode.PENDING);
+  }
+
+  @SneakyThrows
+  private BigqueryStreamWriter getMockedWriter(WriteMode writeMode) {
     this.mockedClient = mock(BigQueryWriteClient.class);
     var writer =
-        spy(new BigqueryStreamWriter("bq_project", "bq_dataset", "bq_table", mockedClient));
+        spy(
+            new BigqueryStreamWriter(
+                "bq_project", "bq_dataset", "bq_table", writeMode, mockedClient));
     this.mockedStreamWriter = mock(JsonStreamWriter.class);
     when(mockedStreamWriter.getStreamName()).thenReturn("stream-name");
     this.mockedApiResponse = mock(AppendRowsResponse.class);
@@ -219,5 +231,27 @@ class BigqueryStreamWriterTest {
     verify(mockedClient).finalizeWriteStream(mockedStreamWriter.getStreamName());
     verify(mockedClient).batchCommitWriteStreams(any(BatchCommitWriteStreamsRequest.class));
     verify(mockedStreamWriter).close();
+  }
+
+  @Test
+  void testCommitWithCommittedMode() {
+    var writer = getMockedWriter(WriteMode.COMMITTED);
+    writer.appendRecord(buildSinkRecord());
+
+    var finalizeResponse = mock(FinalizeWriteStreamResponse.class);
+    when(mockedClient.finalizeWriteStream(mockedStreamWriter.getStreamName()))
+        .thenReturn(finalizeResponse);
+
+    var commitResponse = mock(BatchCommitWriteStreamsResponse.class);
+    when(commitResponse.hasCommitTime()).thenReturn(true);
+    when(mockedClient.batchCommitWriteStreams(any(BatchCommitWriteStreamsRequest.class)))
+        .thenReturn(commitResponse);
+
+    writer.commit();
+
+    verify(mockedClient, never()).finalizeWriteStream(mockedStreamWriter.getStreamName());
+    verify(mockedClient, never())
+        .batchCommitWriteStreams(any(BatchCommitWriteStreamsRequest.class));
+    verify(mockedStreamWriter, never()).close();
   }
 }

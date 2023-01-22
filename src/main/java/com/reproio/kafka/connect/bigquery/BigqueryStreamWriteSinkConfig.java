@@ -25,6 +25,11 @@ public class BigqueryStreamWriteSinkConfig extends AbstractConfig {
   private static final ConfigDef.Importance KEYFILE_IMPORTANCE = ConfigDef.Importance.HIGH;
   private static final String KEYFILE_DOC = "keyfile for auth";
 
+  public static final String WRITE_MODE_CONFIG = "write_mode";
+  private static final ConfigDef.Type WRITE_MODE_TYPE = ConfigDef.Type.STRING;
+  private static final ConfigDef.Importance WRITE_MODE_IMPORTANCE = ConfigDef.Importance.HIGH;
+  private static final String WRITE_MODE_DOC = "keyfile for auth";
+
   protected BigqueryStreamWriteSinkConfig(ConfigDef definition, Map<?, ?> originals) {
     super(definition, originals);
   }
@@ -38,6 +43,7 @@ public class BigqueryStreamWriteSinkConfig extends AbstractConfig {
         .define(PROJECT_CONFIG, PROJECT_TYPE, PROJECT_IMPORTANCE, PROJECT_DOC)
         .define(DATASET_CONFIG, DATASET_TYPE, DATASET_IMPORTANCE, DATASET_DOC)
         .define(TABLE_CONFIG, TABLE_TYPE, TABLE_IMPORTANCE, TABLE_DOC)
-        .define(KEYFILE_CONFIG, KEYFILE_TYPE, KEYFILE_IMPORTANCE, KEYFILE_DOC);
+        .define(KEYFILE_CONFIG, KEYFILE_TYPE, KEYFILE_IMPORTANCE, KEYFILE_DOC)
+        .define(WRITE_MODE_CONFIG, WRITE_MODE_TYPE, WRITE_MODE_IMPORTANCE, WRITE_MODE_DOC);
   }
 }

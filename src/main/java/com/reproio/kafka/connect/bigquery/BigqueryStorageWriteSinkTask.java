@@ -25,6 +25,8 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
 
   private BigqueryStreamWriteSinkConfig config;
 
+  private Long retryBoundary;
+
   @Override
   public String version() {
     return Version.version();
@@ -87,7 +89,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
 
       var topicPartitionWriter = topicPartitionWriters.get(topicPartition);
       topicPartitionWriter.appendRecord(record);
-      if (topicPartitionWriter.isExceedRecordLimit()) {
+      if (retryBoundary == record.kafkaOffset() || topicPartitionWriter.isExceedRecordLimit()) {
         log.trace("Exceed record limit");
         flushTopicPartitionWriter(topicPartitionWriter, topicPartition);
       }
@@ -166,19 +168,20 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
       return true;
     }
 
-    var corruptedRowOffsets = getCorruptedRowOffsets(topicPartition);
-    corruptedRowOffsets.clear();
-    corruptedRowOffsets.addAll(appendContext.corruptedRowKafkaOffsets());
-    if (appendContext.hasUnretryableError()) {
-      log.error(
-          "Unretryable error is occured: {topic={}, from={}, to={}}",
-          topicPartition.topic(),
-          appendContext.getFirstKafkaOffset(),
-          appendContext.getLastKafkaOffset(),
-          appendContext.getError());
-    }
+    this.retryBoundary = null;
     if (appendContext.hasError()) {
-      log.info("rewind.offsets: {}", currentOffsets);
+      var corruptedRowOffsets = getCorruptedRowOffsets(topicPartition);
+      corruptedRowOffsets.clear();
+      corruptedRowOffsets.addAll(appendContext.corruptedRowKafkaOffsets());
+      this.retryBoundary = appendContext.getLastKafkaOffset();
+      if (appendContext.hasUnretryableError()) {
+        log.error(
+            "Unretryable error is occured: {topic={}, from={}, to={}}",
+            topicPartition.topic(),
+            appendContext.getFirstKafkaOffset(),
+            appendContext.getLastKafkaOffset(),
+            appendContext.getError());
+      }
       rewindToAppendContextOffset(currentOffsets, topicPartition, appendContext);
       return false;
     }
@@ -190,6 +193,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
       Map<TopicPartition, OffsetAndMetadata> currentOffsets,
       TopicPartition topicPartition,
       AppendContext appendContext) {
+    log.info("rewind.offsets: {}", currentOffsets);
     var currentOffsetAndMetadata = currentOffsets.get(topicPartition);
     var newOffsetAndMetaData =
         new OffsetAndMetadata(

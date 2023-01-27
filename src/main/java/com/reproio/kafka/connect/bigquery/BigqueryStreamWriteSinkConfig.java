@@ -3,6 +3,8 @@ package com.reproio.kafka.connect.bigquery;
 import java.util.Map;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
 
 public class BigqueryStreamWriteSinkConfig extends AbstractConfig {
   public static final String PROJECT_CONFIG = "project";
@@ -31,6 +33,13 @@ public class BigqueryStreamWriteSinkConfig extends AbstractConfig {
   private static final ConfigDef.Importance WRITE_MODE_IMPORTANCE = ConfigDef.Importance.HIGH;
   private static final String WRITE_MODE_DOC = "keyfile for auth";
 
+  public static final String BUFFER_SIZE_CONFIG = "buffer.size";
+  public static final String BUFFER_SIZE_DEFAULT = "1000";
+  private static final ConfigDef.Type BUFFER_SIZE_TYPE = Type.INT;
+  private static final ConfigDef.Importance BUFFER_SIZE_IMPORTANCE = Importance.MEDIUM;
+  private static final String BUFFER_SIZE_DOC =
+      "The maximum number of records to buffer per topic partition";
+
   protected BigqueryStreamWriteSinkConfig(ConfigDef definition, Map<?, ?> originals) {
     super(definition, originals);
   }
@@ -50,6 +59,12 @@ public class BigqueryStreamWriteSinkConfig extends AbstractConfig {
             WRITE_MODE_TYPE,
             WRITE_MODE_DEFAULT,
             WRITE_MODE_IMPORTANCE,
-            WRITE_MODE_DOC);
+            WRITE_MODE_DOC)
+        .define(
+            BUFFER_SIZE_CONFIG,
+            BUFFER_SIZE_TYPE,
+            BUFFER_SIZE_DEFAULT,
+            BUFFER_SIZE_IMPORTANCE,
+            BUFFER_SIZE_DOC);
   }
 }

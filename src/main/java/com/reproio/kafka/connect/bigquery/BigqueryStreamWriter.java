@@ -51,7 +51,8 @@ public class BigqueryStreamWriter implements Closeable {
 
   private int currentOffset;
 
-  private static final int BUFFER_CHUNK_RECORD_LIMIT = 1000;
+  private final int bufferSize;
+
   @VisibleForTesting final List<SinkRecord> currentBufferChunk = new ArrayList<>();
 
   private final Phaser inflightRequests = new Phaser(1);
@@ -63,7 +64,12 @@ public class BigqueryStreamWriter implements Closeable {
 
   @SneakyThrows
   public static BigqueryStreamWriter create(
-      String project, String dataset, String table, WriteMode writeMode, String keyfile) {
+      String project,
+      String dataset,
+      String table,
+      WriteMode writeMode,
+      String keyfile,
+      int bufferSize) {
     var keyFileStream = new FileInputStream(keyfile);
     var writeSettings =
         BigQueryWriteSettings.newBuilder()
@@ -71,7 +77,7 @@ public class BigqueryStreamWriter implements Closeable {
                 FixedCredentialsProvider.create(GoogleCredentials.fromStream(keyFileStream)))
             .build();
     var client = BigQueryWriteClient.create(writeSettings);
-    return new BigqueryStreamWriter(project, dataset, table, writeMode, client);
+    return new BigqueryStreamWriter(project, dataset, table, writeMode, bufferSize, client);
   }
 
   @VisibleForTesting
@@ -80,9 +86,11 @@ public class BigqueryStreamWriter implements Closeable {
       String dataset,
       String table,
       WriteMode writeMode,
+      int bufferSize,
       BigQueryWriteClient client) {
     this.tableName = TableName.of(project, dataset, table);
     this.writeMode = writeMode;
+    this.bufferSize = bufferSize;
     this.client = client;
   }
 
@@ -206,7 +214,7 @@ public class BigqueryStreamWriter implements Closeable {
   }
 
   public boolean isExceedRecordLimit() {
-    return currentBufferChunk.size() >= BUFFER_CHUNK_RECORD_LIMIT;
+    return currentBufferChunk.size() >= bufferSize;
   }
 
   @SneakyThrows

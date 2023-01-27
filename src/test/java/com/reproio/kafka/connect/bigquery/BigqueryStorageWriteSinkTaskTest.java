@@ -64,7 +64,12 @@ class BigqueryStorageWriteSinkTaskTest {
           .when(
               () ->
                   BigqueryStreamWriter.create(
-                      "bq_project", "bq_dataset", "bq_table", WriteMode.PENDING, "/tmp/dummy_key"))
+                      "bq_project",
+                      "bq_dataset",
+                      "bq_table",
+                      WriteMode.PENDING,
+                      "/tmp/dummy_key",
+                      1000))
           .thenReturn(mockedWriter);
       task.open(topicPartitions);
     }

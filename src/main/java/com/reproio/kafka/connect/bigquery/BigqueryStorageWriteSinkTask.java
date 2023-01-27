@@ -51,9 +51,11 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
     var writeMode =
         WriteMode.valueOf(
             config.getString(BigqueryStreamWriteSinkConfig.WRITE_MODE_CONFIG).toUpperCase());
+    var bufferSize = config.getInt(BigqueryStreamWriteSinkConfig.BUFFER_SIZE_CONFIG);
     partitions.forEach(
         topicPartition -> {
-          var writer = BigqueryStreamWriter.create(project, dataset, table, writeMode, keyfile);
+          var writer =
+              BigqueryStreamWriter.create(project, dataset, table, writeMode, keyfile, bufferSize);
           topicPartitionWriters.put(topicPartition, writer);
         });
     log.trace("task.open: {}", topicPartitionWriters);

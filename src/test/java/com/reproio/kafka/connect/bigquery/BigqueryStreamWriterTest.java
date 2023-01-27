@@ -62,7 +62,7 @@ class BigqueryStreamWriterTest {
     this.mockedClient = mock(BigQueryWriteClient.class);
     var writer =
         new BigqueryStreamWriter(
-            "bq_project", "bq_dataset", "bq_table", WriteMode.PENDING, mockedClient);
+            "bq_project", "bq_dataset", "bq_table", WriteMode.PENDING, 1000, mockedClient);
 
     SinkRecord sinkRecord = buildSinkRecord();
     writer.appendRecord(sinkRecord);
@@ -76,7 +76,7 @@ class BigqueryStreamWriterTest {
     var writer =
         spy(
             new BigqueryStreamWriter(
-                "bq_project", "bq_dataset", "bq_table", WriteMode.PENDING, mockedClient));
+                "bq_project", "bq_dataset", "bq_table", WriteMode.PENDING, 1000, mockedClient));
 
     when(writer.write())
         .then(
@@ -111,7 +111,7 @@ class BigqueryStreamWriterTest {
     var writer =
         spy(
             new BigqueryStreamWriter(
-                "bq_project", "bq_dataset", "bq_table", writeMode, mockedClient));
+                "bq_project", "bq_dataset", "bq_table", writeMode, 1000, mockedClient));
     this.mockedStreamWriter = mock(JsonStreamWriter.class);
     when(mockedStreamWriter.getStreamName()).thenReturn("stream-name");
     this.mockedApiResponse = mock(AppendRowsResponse.class);

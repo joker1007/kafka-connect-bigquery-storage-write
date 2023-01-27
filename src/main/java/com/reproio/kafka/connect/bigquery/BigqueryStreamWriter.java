@@ -95,7 +95,7 @@ public class BigqueryStreamWriter implements Closeable {
   }
 
   public void waitAllInflightRequests() {
-    log.info("Wait all inflight requets");
+    log.debug("Wait all inflight requests");
     inflightRequests.arriveAndAwaitAdvance();
   }
 
@@ -116,7 +116,6 @@ public class BigqueryStreamWriter implements Closeable {
     @Nullable private AppendRowsResponse appendRowsResponse;
     @Nullable private Throwable error;
     @Nullable private StorageException storageException;
-    private int retryCount;
 
     private static final List<Code> RETRIABLE_ERROR_CODES =
         List.of(
@@ -132,7 +131,7 @@ public class BigqueryStreamWriter implements Closeable {
       this.storageException = Exceptions.toStorageException(error);
     }
 
-    private Code storageErrorCode() {
+    public Code getStorageErrorCode() {
       return storageException == null ? Code.UNKNOWN : storageException.getStatus().getCode();
     }
 
@@ -150,15 +149,15 @@ public class BigqueryStreamWriter implements Closeable {
     }
 
     public boolean hasUnretryableError() {
-      return error != null && !RETRIABLE_ERROR_CODES.contains(storageErrorCode());
+      return error != null && !RETRIABLE_ERROR_CODES.contains(getStorageErrorCode());
     }
 
     public boolean isAlreadyExists() {
-      return storageErrorCode() == Code.ALREADY_EXISTS;
+      return getStorageErrorCode() == Code.ALREADY_EXISTS;
     }
 
     public boolean isOutOfRange() {
-      return storageErrorCode() == Code.OUT_OF_RANGE;
+      return getStorageErrorCode() == Code.OUT_OF_RANGE;
     }
 
     public List<Long> corruptedRowKafkaOffsets() {
@@ -239,7 +238,7 @@ public class BigqueryStreamWriter implements Closeable {
 
       return sendPayload(jsonArray, writtenRecordOffsets, List.of());
     } catch (AppendSerializtionError e) {
-      log.error("Failed to serialize:", e);
+      log.error("Failed to serialize", e);
       Map<Integer, String> rowIndexToErrorMessage = e.getRowIndexToErrorMessage();
       var newArray = new JSONArray();
       List<Long> newWrittenRecordOffsets = new ArrayList<>();
@@ -295,22 +294,22 @@ public class BigqueryStreamWriter implements Closeable {
 
   private void finalizeStream() {
     if (streamWriter != null) {
-      log.info("Attempt to Finalize Stream {}", streamWriter.getStreamName());
+      log.info("Attempt to Finalize Stream: {}", streamWriter.getStreamName());
       try {
         FinalizeWriteStreamResponse response =
             client.finalizeWriteStream(streamWriter.getStreamName());
         log.info(
-            "Finalize Stream: written: {}, {} records",
-            streamWriter.getStreamName(),
-            response.getRowCount());
+            "Finalized Stream: written {} records to {}",
+            response.getRowCount(),
+            streamWriter.getStreamName());
       } catch (Exception e) {
-        log.error("Failed to finalize stream {}", streamWriter.getStreamName(), e);
+        log.error("Failed to finalize stream: {}", streamWriter.getStreamName(), e);
       }
     }
   }
 
   private void commitStream() {
-    log.info("Attempt to commit Stream {}", streamWriter.getStreamName());
+    log.info("Attempt to commit Stream: {}", streamWriter.getStreamName());
     var commitRequest =
         BatchCommitWriteStreamsRequest.newBuilder()
             .setParent(tableName.toString())
@@ -319,31 +318,33 @@ public class BigqueryStreamWriter implements Closeable {
     BatchCommitWriteStreamsResponse response = client.batchCommitWriteStreams(commitRequest);
     if (response.hasCommitTime()) {
       log.info(
-          "Commit Stream {}: commit_time={}",
+          "Committed Stream: {} commit_time={}",
           streamWriter.getStreamName(),
           response.getCommitTime());
     } else {
-      log.error("Commit failed");
+      log.error("Commit failed: {}", streamWriter.getStreamName());
       throw new RuntimeException(response.getStreamErrors(0).getErrorMessage());
     }
   }
 
   public void reset() {
     finalizeStream();
-    log.debug("Clear streamWriter");
-    streamWriter.close();
-    this.streamWriter = null;
-    this.currentBufferChunk.clear();
+    clearStreamWriter();
   }
 
   public void commit() {
     if (writeMode == WriteMode.PENDING) {
       finalizeStream();
       commitStream();
-      log.debug("Clear streamWriter");
-      streamWriter.close();
-      this.streamWriter = null;
+      clearStreamWriter();
     }
+  }
+
+  private void clearStreamWriter() {
+    log.debug("Clear streamWriter");
+    streamWriter.close();
+    this.streamWriter = null;
+    this.currentBufferChunk.clear();
   }
 
   class AppendCompleteCallback implements ApiFutureCallback<AppendRowsResponse> {

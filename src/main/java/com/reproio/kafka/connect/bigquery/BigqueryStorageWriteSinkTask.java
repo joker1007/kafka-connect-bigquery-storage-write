@@ -75,7 +75,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
     if (context.errantRecordReporter() != null) {
       context.errantRecordReporter().report(record, new CorruptedRowException());
     } else {
-      log.warn("Detect Corrupted Row: {}", record);
+      log.trace("Detect Corrupted Row: {}", record);
     }
   }
 
@@ -132,7 +132,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
               preCommitForTopicPartitionWriter(
                   currentOffsets, topicPartition, bigqueryStreamWriter);
             });
-    log.info("commit.offsets: {}", currentOffsets);
+    log.trace("commit.offsets: {}", currentOffsets);
     return currentOffsets;
   }
 
@@ -187,6 +187,10 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
     if (appendContext.hasError()) {
       corruptedRowOffsets.addAll(appendContext.corruptedRowKafkaOffsets());
       this.retryBoundary = appendContext.getLastKafkaOffset();
+      log.error(
+          "PreCommit for AppendContext is failed, a record in corruptedRowOffsets is ignored next retry: {corruptedRowOffsets={}, storageErrorCode={}}",
+          corruptedRowOffsets,
+          appendContext.getStorageErrorCode());
       if (appendContext.hasUnretryableError()) {
         log.error(
             "Unretryable error is occured: {topic={}, from={}, to={}}",
@@ -222,10 +226,11 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
     super.close(partitions);
     partitions.forEach(tp -> topicPartitionWriters.get(tp).close());
     topicPartitionWriters.clear();
+    log.trace("task.close: {}", partitions);
   }
 
   @Override
   public void stop() {
-    log.debug("task.close");
+    log.trace("task.close");
   }
 }

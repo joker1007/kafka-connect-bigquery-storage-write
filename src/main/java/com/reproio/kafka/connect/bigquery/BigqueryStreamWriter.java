@@ -100,7 +100,9 @@ public class BigqueryStreamWriter implements Closeable {
   }
 
   public void close() {
-    streamWriter.close();
+    if (streamWriter != null) {
+      streamWriter.close();
+    }
     client.close();
   }
 

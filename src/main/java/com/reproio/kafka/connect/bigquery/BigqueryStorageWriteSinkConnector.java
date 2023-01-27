@@ -53,7 +53,7 @@ public class BigqueryStorageWriteSinkConnector extends SinkConnector {
     try {
       WriteMode.valueOf(castedWriteModeValue.toUpperCase());
     } catch (IllegalArgumentException ex) {
-      writeModeValue.addErrorMessage(ex.getMessage());
+      writeModeValue.addErrorMessage("write.mode value must be `committed` or `pending`");
     }
     return config;
   }

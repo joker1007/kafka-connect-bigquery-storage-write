@@ -23,7 +23,7 @@ This is an implementation of a sink connector from [Apache Kafka](http://kafka.a
   "config": {
     "connector.class": "com.reproio.kafka.connect.bigquery.BigqueryStorageWriteSinkConnector",
     "tasks.max" : "4",
-    "topics" : "CustomEventLogs",
+    "topics" : "sample-topics",
     "project" : "sample-project",
     "dataset" : "sample_dataset",
     "table": "sample_table",

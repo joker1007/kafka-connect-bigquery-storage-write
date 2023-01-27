@@ -13,6 +13,7 @@ import com.google.cloud.bigquery.storage.v1.BigQueryWriteSettings;
 import com.google.cloud.bigquery.storage.v1.CreateWriteStreamRequest;
 import com.google.cloud.bigquery.storage.v1.Exceptions;
 import com.google.cloud.bigquery.storage.v1.Exceptions.AppendSerializtionError;
+import com.google.cloud.bigquery.storage.v1.Exceptions.StorageException;
 import com.google.cloud.bigquery.storage.v1.FinalizeWriteStreamResponse;
 import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
 import com.google.cloud.bigquery.storage.v1.TableName;
@@ -104,6 +105,7 @@ public class BigqueryStreamWriter implements Closeable {
     private final int writtenWriterStreamOffset;
     @Nullable private AppendRowsResponse appendRowsResponse;
     @Nullable private Throwable error;
+    @Nullable private StorageException storageException;
     private int retryCount;
 
     private static final List<Code> RETRIABLE_ERROR_CODES =
@@ -114,6 +116,15 @@ public class BigqueryStreamWriter implements Closeable {
             Code.FAILED_PRECONDITION,
             Code.DEADLINE_EXCEEDED,
             Code.UNAVAILABLE);
+
+    public void setError(Throwable error) {
+      this.error = error;
+      this.storageException = Exceptions.toStorageException(error);
+    }
+
+    private Code storageErrorCode() {
+      return storageException == null ? Code.UNKNOWN : storageException.getStatus().getCode();
+    }
 
     public long getFirstKafkaOffset() {
       return writtenRecordKafkaOffsets.get(0);
@@ -129,21 +140,15 @@ public class BigqueryStreamWriter implements Closeable {
     }
 
     public boolean hasUnretryableError() {
-      if (error == null) {
-        return false;
-      }
-      var storageException = Exceptions.toStorageException(error);
-      return storageException == null
-          || !RETRIABLE_ERROR_CODES.contains(storageException.getStatus().getCode());
+      return error != null && !RETRIABLE_ERROR_CODES.contains(storageErrorCode());
     }
 
     public boolean isAlreadyExists() {
-      if (error == null) {
-        return false;
-      }
-      var storageException = Exceptions.toStorageException(error);
-      return storageException != null
-          && storageException.getStatus().getCode() == Code.ALREADY_EXISTS;
+      return storageErrorCode() == Code.ALREADY_EXISTS;
+    }
+
+    public boolean isOutOfRange() {
+      return storageErrorCode() == Code.OUT_OF_RANGE;
     }
 
     public List<Long> corruptedRowKafkaOffsets() {
@@ -234,7 +239,8 @@ public class BigqueryStreamWriter implements Closeable {
           newArray.put(jsonArray.get(i));
           newWrittenRecordOffsets.add(writtenRecordOffsets.get(i));
         } else {
-          log.error("Row Error: {}", rowIndexToErrorMessage.get(i));
+          log.error(
+              "Row Error: {}, record={}", rowIndexToErrorMessage.get(i), currentBufferChunk.get(i));
           errorRecordOffsets.add(writtenRecordOffsets.get(i));
         }
       }
@@ -263,7 +269,7 @@ public class BigqueryStreamWriter implements Closeable {
     ApiFutures.addCallback(
         future, new AppendCompleteCallback(appendContext), MoreExecutors.directExecutor());
     inflightRequests.register();
-    this.currentOffset += currentBufferChunk.size();
+    this.currentOffset += writtenRecordOffsets.size();
     log.debug("Update current offset: {}", currentOffset);
     currentBufferChunk.clear();
     return Optional.of(appendContext);
@@ -280,12 +286,16 @@ public class BigqueryStreamWriter implements Closeable {
   private void finalizeStream() {
     if (streamWriter != null) {
       log.info("Attempt to Finalize Stream {}", streamWriter.getStreamName());
-      FinalizeWriteStreamResponse response =
-          client.finalizeWriteStream(streamWriter.getStreamName());
-      log.info(
-          "Finalize Stream: written: {}, {} records",
-          streamWriter.getStreamName(),
-          response.getRowCount());
+      try {
+        FinalizeWriteStreamResponse response =
+            client.finalizeWriteStream(streamWriter.getStreamName());
+        log.info(
+            "Finalize Stream: written: {}, {} records",
+            streamWriter.getStreamName(),
+            response.getRowCount());
+      } catch (Exception e) {
+        log.error("Failed to finalize stream {}", streamWriter.getStreamName(), e);
+      }
     }
   }
 

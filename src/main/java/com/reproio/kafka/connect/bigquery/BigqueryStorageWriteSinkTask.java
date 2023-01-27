@@ -77,6 +77,10 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
     }
   }
 
+  private boolean matchRetryBoundary(SinkRecord record) {
+    return retryBoundary != null && retryBoundary == record.kafkaOffset();
+  }
+
   @Override
   public void put(Collection<SinkRecord> records) {
     for (SinkRecord record : records) {
@@ -89,7 +93,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
 
       var topicPartitionWriter = topicPartitionWriters.get(topicPartition);
       topicPartitionWriter.appendRecord(record);
-      if (retryBoundary == record.kafkaOffset() || topicPartitionWriter.isExceedRecordLimit()) {
+      if (matchRetryBoundary(record) || topicPartitionWriter.isExceedRecordLimit()) {
         log.trace("Exceed record limit");
         flushTopicPartitionWriter(topicPartitionWriter, topicPartition);
       }
@@ -163,15 +167,22 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
       Map<TopicPartition, OffsetAndMetadata> currentOffsets,
       TopicPartition topicPartition,
       AppendContext appendContext) {
-    log.debug("AppendContext: {}", appendContext.getAppendRowsResponse());
+    log.debug("PreCommit for AppendContext: {}", appendContext);
+
+    this.retryBoundary = null;
+    var corruptedRowOffsets = getCorruptedRowOffsets(topicPartition);
+    corruptedRowOffsets.clear();
+
     if (appendContext.isAlreadyExists()) {
       return true;
     }
 
-    this.retryBoundary = null;
+    if (appendContext.isOutOfRange()) {
+      rewindToAppendContextOffset(currentOffsets, topicPartition, appendContext);
+      return false;
+    }
+
     if (appendContext.hasError()) {
-      var corruptedRowOffsets = getCorruptedRowOffsets(topicPartition);
-      corruptedRowOffsets.clear();
       corruptedRowOffsets.addAll(appendContext.corruptedRowKafkaOffsets());
       this.retryBoundary = appendContext.getLastKafkaOffset();
       if (appendContext.hasUnretryableError()) {

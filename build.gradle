@@ -66,3 +66,8 @@ spotless {
 classes {
     dependsOn tasks.spotlessApply
 }
+
+distTar {
+    compression = Compression.GZIP
+    archiveExtension = "tar.gz"
+}

@@ -36,7 +36,7 @@ class BigqueryStorageWriteSinkTaskTest {
           "bq_table",
           "keyfile",
           "/tmp/dummy_key",
-          "write_mode",
+          "write.mode",
           "pending");
 
   private final Schema valueSchema =

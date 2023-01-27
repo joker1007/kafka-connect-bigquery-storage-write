@@ -27,7 +27,7 @@ public class BigqueryStreamWriteSinkConfig extends AbstractConfig {
   private static final ConfigDef.Importance KEYFILE_IMPORTANCE = ConfigDef.Importance.HIGH;
   private static final String KEYFILE_DOC = "keyfile for auth";
 
-  public static final String WRITE_MODE_CONFIG = "write_mode";
+  public static final String WRITE_MODE_CONFIG = "write.mode";
   public static final String WRITE_MODE_DEFAULT = "committed";
   private static final ConfigDef.Type WRITE_MODE_TYPE = ConfigDef.Type.STRING;
   private static final ConfigDef.Importance WRITE_MODE_IMPORTANCE = ConfigDef.Importance.HIGH;

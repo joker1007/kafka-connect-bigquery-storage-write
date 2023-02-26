@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -159,6 +160,27 @@ class BigqueryStorageWriteSinkTaskTest {
   }
 
   @Test
+  void testPreCommitWithRetryBoundaries() {
+    setUpTask();
+    var topicPartition = new TopicPartition(topicName, 0);
+    task.getRetryBoundaries(topicPartition).add(0L);
+
+    var records = List.of(buildSinkRecord(), buildSinkRecord());
+    task.put(records);
+
+    var mockedAppendContext = mock(AppendContext.class);
+    when(mockedWriter.write()).thenReturn(Optional.of(mockedAppendContext));
+    var offsets = task.preCommit(Map.of(topicPartition, new OffsetAndMetadata(2)));
+
+    verify(mockedWriter, times(2)).write();
+    verify(mockedWriter).commit();
+    verify(mockedWriter, never()).reset();
+    assertTrue(task.getInflightContexts(topicPartition).isEmpty());
+    assertTrue(task.getRetryBoundaries(topicPartition).isEmpty());
+    assertEquals(2, offsets.get(topicPartition).offset());
+  }
+
+  @Test
   void testPreCommitWithCorruptedRows() {
     setUpTask();
 
@@ -168,6 +190,9 @@ class BigqueryStorageWriteSinkTaskTest {
     var topicPartition = new TopicPartition(topicName, 0);
 
     var mockedAppendContext = mock(AppendContext.class);
+    when(mockedAppendContext.getWrittenRecordKafkaOffsets()).thenReturn(List.of(0L, 1L));
+    when(mockedAppendContext.getFirstKafkaOffset()).thenReturn(0L);
+    when(mockedAppendContext.getLastKafkaOffset()).thenReturn(1L);
     when(mockedAppendContext.corruptedRowKafkaOffsets()).thenReturn(List.of(0L, 1L));
     when(mockedAppendContext.hasError()).thenReturn(true);
     when(mockedWriter.write()).thenReturn(Optional.of(mockedAppendContext));
@@ -180,6 +205,7 @@ class BigqueryStorageWriteSinkTaskTest {
     verify(mockedWriter).reset();
     assertTrue(task.getInflightContexts(topicPartition).isEmpty());
     assertEquals(Set.of(0L, 1L), task.getCorruptedRowOffsets(topicPartition));
+    assertEquals(Set.of(1L), task.getRetryBoundaries(topicPartition));
     assertEquals(0, offsets.get(topicPartition).offset());
   }
 }

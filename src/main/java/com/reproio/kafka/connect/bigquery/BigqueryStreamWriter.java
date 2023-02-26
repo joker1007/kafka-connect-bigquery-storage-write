@@ -136,11 +136,11 @@ public class BigqueryStreamWriter implements Closeable {
     }
 
     public long getFirstKafkaOffset() {
-      return writtenRecordKafkaOffsets.get(0);
+      return getWrittenRecordKafkaOffsets().get(0);
     }
 
     public long getLastKafkaOffset() {
-      return writtenRecordKafkaOffsets.get(writtenRecordKafkaOffsets.size() - 1);
+      return getWrittenRecordKafkaOffsets().get(getWrittenRecordKafkaOffsets().size() - 1);
     }
 
     public boolean hasError() {

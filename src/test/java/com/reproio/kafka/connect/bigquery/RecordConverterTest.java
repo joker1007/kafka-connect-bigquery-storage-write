@@ -7,6 +7,7 @@ import java.util.Map;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.junit.jupiter.api.Test;
 import org.skyscreamer.jsonassert.JSONAssert;
@@ -14,7 +15,7 @@ import org.skyscreamer.jsonassert.JSONAssert;
 class RecordConverterTest {
 
   @Test
-  void testExtractJsonObject() {
+  void testExtractJsonObject() throws JSONException {
     var innerSchema =
         SchemaBuilder.struct()
             .field("inner1", Schema.STRING_SCHEMA)

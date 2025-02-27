@@ -27,22 +27,24 @@ repositories {
 }
 
 dependencies {
-    implementation 'org.apache.kafka:connect-runtime:3.7.1'
-    implementation 'org.apache.kafka:kafka-clients:3.7.1'
+    implementation 'org.apache.kafka:connect-runtime:3.9.0'
+    implementation 'org.apache.kafka:kafka-clients:3.9.0'
     implementation 'org.apache.avro:avro:1.12.0'
-    implementation('io.confluent:kafka-streams-avro-serde:7.7.1') {
+    implementation('io.confluent:kafka-streams-avro-serde:7.9.0') {
         exclude module: "kafka-clients"
     }
-    implementation('io.confluent:kafka-avro-serializer:7.7.1') {
+    implementation('io.confluent:kafka-avro-serializer:7.9.0') {
         exclude module: "kafka-clients"
     }
-    implementation platform('com.google.cloud:libraries-bom:26.43.0')
+    implementation platform('com.google.cloud:libraries-bom:26.55.0')
     implementation 'com.google.cloud:google-cloud-bigquery'
-    implementation 'com.google.cloud:google-cloud-bigquerystorage:3.11.2'
+    implementation 'com.google.cloud:google-cloud-bigquerystorage'
+    implementation 'io.grpc:grpc-xds:1.69.0'
+    implementation 'org.json:json:20250107' // avoid class loader confusing
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.8.2'
     testImplementation 'org.mockito:mockito-core:5.0.0'
-    testImplementation 'org.skyscreamer:jsonassert:1.5.1'
+    testImplementation 'org.skyscreamer:jsonassert:1.5.3'
     testImplementation "org.testcontainers:testcontainers:1.20.4"
     testImplementation "org.testcontainers:junit-jupiter:1.20.4"
     testImplementation "org.testcontainers:gcloud:1.20.4"

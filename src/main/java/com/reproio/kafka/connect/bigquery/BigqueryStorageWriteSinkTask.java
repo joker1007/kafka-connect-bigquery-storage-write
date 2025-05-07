@@ -11,6 +11,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import lombok.extern.slf4j.Slf4j;
@@ -237,7 +238,11 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
   @Override
   public void close(Collection<TopicPartition> partitions) {
     super.close(partitions);
-    partitions.forEach(tp -> topicPartitionWriters.get(tp).close());
+    // NOTE: Handle potential multiple invocations of close() by treating map entries as Optional,
+    // since the map may have already been cleared in a prior call.
+    partitions.forEach(
+        tp ->
+            Optional.ofNullable(topicPartitionWriters.get(tp)).ifPresent(writer -> writer.close()));
     topicPartitionWriters.clear();
     log.trace("task.close: {}", partitions);
   }

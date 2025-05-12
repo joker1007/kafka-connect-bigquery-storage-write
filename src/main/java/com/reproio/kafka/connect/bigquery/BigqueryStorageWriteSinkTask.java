@@ -123,9 +123,12 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
 
   @Override
   public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    // NOTE: Handle potential multiple invocations of flush() by treating map entries as Optional,
+    // since the map may have already been cleared in a prior call.
     currentOffsets.forEach(
         (topicPartition, offsetAndMetadata) ->
-            flushTopicPartitionWriter(topicPartitionWriters.get(topicPartition), topicPartition));
+            Optional.ofNullable(topicPartitionWriters.get(topicPartition))
+                .ifPresent(writer -> flushTopicPartitionWriter(writer, topicPartition)));
   }
 
   @Override

@@ -30,6 +30,8 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
 
   private final Map<TopicPartition, NavigableSet<Long>> retryBoundaries = new HashMap<>();
 
+  private volatile boolean stopped;
+
   @Override
   public String version() {
     return Version.version();
@@ -123,6 +125,12 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
 
   @Override
   public void flush(Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
+    // Return immediately here since the task will already be stopped
+    if (stopped) {
+      log.warn("Flush called after task was stopped. Skipping flush operation.");
+      return;
+    }
+
     currentOffsets.forEach(
         (topicPartition, offsetAndMetadata) ->
             flushTopicPartitionWriter(topicPartitionWriters.get(topicPartition), topicPartition));
@@ -249,6 +257,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
 
   @Override
   public void stop() {
+    stopped = true;
     log.trace("task.close");
   }
 }

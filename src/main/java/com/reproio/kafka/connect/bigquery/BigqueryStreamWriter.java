@@ -131,7 +131,7 @@ public class BigqueryStreamWriter implements Closeable {
       this.storageException = Exceptions.toStorageException(error);
     }
 
-    public Code getStorageErrorCode() {
+    public Code getGrpcStatusCode() {
       return storageException == null ? Code.UNKNOWN : storageException.getStatus().getCode();
     }
 
@@ -149,15 +149,17 @@ public class BigqueryStreamWriter implements Closeable {
     }
 
     public boolean hasUnretryableError() {
-      return error != null && !RETRIABLE_ERROR_CODES.contains(getStorageErrorCode());
+      return error != null && !RETRIABLE_ERROR_CODES.contains(getGrpcStatusCode());
     }
 
     public boolean isAlreadyExists() {
-      return getStorageErrorCode() == Code.ALREADY_EXISTS;
+      return getGrpcStatusCode() == Code.ALREADY_EXISTS
+          || storageException instanceof Exceptions.OffsetAlreadyExists;
     }
 
     public boolean isOutOfRange() {
-      return getStorageErrorCode() == Code.OUT_OF_RANGE;
+      return getGrpcStatusCode() == Code.OUT_OF_RANGE
+          || storageException instanceof Exceptions.OffsetOutOfRange;
     }
 
     public List<Long> corruptedRowKafkaOffsets() {

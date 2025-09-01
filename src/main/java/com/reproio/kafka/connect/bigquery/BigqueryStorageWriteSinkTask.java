@@ -31,6 +31,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
   private final Map<TopicPartition, NavigableSet<Long>> retryBoundaries = new HashMap<>();
 
   private volatile boolean stopped;
+  private volatile boolean closed;
 
   @Override
   public String version() {
@@ -63,6 +64,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
               BigqueryStreamWriter.create(project, dataset, table, writeMode, keyfile, bufferSize);
           topicPartitionWriters.put(topicPartition, writer);
         });
+    closed = false;
     log.trace("task.open: {}", topicPartitionWriters);
   }
 
@@ -128,6 +130,12 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
     // Return immediately here since the task will already be stopped
     if (stopped) {
       log.warn("Flush called after task was stopped. Skipping flush operation.");
+      return;
+    }
+
+    // Prevent flush execution when no partitions are assigned, such as during rebalancing
+    if (closed) {
+      log.info("Skipping flush because the task is already closed");
       return;
     }
 
@@ -252,6 +260,7 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
         tp ->
             Optional.ofNullable(topicPartitionWriters.get(tp)).ifPresent(writer -> writer.close()));
     topicPartitionWriters.clear();
+    closed = true;
     log.trace("task.close: {}", partitions);
   }
 

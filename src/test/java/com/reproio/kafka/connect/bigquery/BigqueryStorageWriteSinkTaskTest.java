@@ -140,6 +140,16 @@ class BigqueryStorageWriteSinkTaskTest {
   }
 
   @Test
+  void testFlushWhenTaskClosed() {
+    setUpTask();
+
+    task.close(List.of(new TopicPartition(topicName, 0)));
+    task.flush(Map.of(new TopicPartition(topicName, 0), new OffsetAndMetadata(0)));
+
+    verify(mockedWriter, never()).write();
+  }
+
+  @Test
   void testPreCommit() {
     setUpTask();
 

@@ -218,9 +218,9 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
       topicPartitionRetryBoundaries.add(appendContext.getLastKafkaOffset());
       log.error("AppendContext has error", appendContext.getError());
       log.error(
-          "PreCommit for AppendContext is failed, a record in corruptedRowOffsets is ignored next retry: {corruptedRowOffsets={}, storageErrorCode={}}}",
+          "PreCommit for AppendContext is failed, a record in corruptedRowOffsets is ignored next retry: {corruptedRowOffsets={}, grpcErrorCode={}}}",
           corruptedRowOffsets,
-          appendContext.getStorageErrorCode());
+          appendContext.getGrpcStatusCode());
       if (appendContext.hasUnretryableError()) {
         log.error(
             "Unretryable error is occured: {topic={}, partition={}, from={}, to={}}",

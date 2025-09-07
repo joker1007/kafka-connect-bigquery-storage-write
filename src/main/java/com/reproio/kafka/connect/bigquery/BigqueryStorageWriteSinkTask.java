@@ -14,6 +14,7 @@ import java.util.NavigableSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -147,17 +148,24 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
   @Override
   public Map<TopicPartition, OffsetAndMetadata> preCommit(
       Map<TopicPartition, OffsetAndMetadata> currentOffsets) {
-    flush(currentOffsets);
+    // Remove already revoked partitions
+    var assigned = topicPartitionWriters.keySet();
+    var filteredOffsets =
+        currentOffsets.entrySet().stream()
+            .filter(e -> assigned.contains(e.getKey()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+    flush(filteredOffsets);
     topicPartitionWriters.entrySet().parallelStream()
         .forEach(
             entry -> {
               var topicPartition = entry.getKey();
               var bigqueryStreamWriter = entry.getValue();
               preCommitForTopicPartitionWriter(
-                  currentOffsets, topicPartition, bigqueryStreamWriter);
+                  filteredOffsets, topicPartition, bigqueryStreamWriter);
             });
-    log.trace("commit.offsets: {}", currentOffsets);
-    return currentOffsets;
+    log.trace("commit.offsets: {}", filteredOffsets);
+    return filteredOffsets;
   }
 
   private void preCommitForTopicPartitionWriter(

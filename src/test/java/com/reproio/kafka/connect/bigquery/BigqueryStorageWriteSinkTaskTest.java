@@ -89,7 +89,7 @@ class BigqueryStorageWriteSinkTaskTest {
     assertThrows(ConfigException.class, () -> task.start(config));
   }
 
-  private SinkRecord buildSinkRecord() {
+  private SinkRecord buildSinkRecord(int partition) {
     var struct = new Struct(valueSchema);
     struct.put("id", "id-" + sinkRecordOffset);
     struct.put("int_value", 123L);
@@ -97,7 +97,7 @@ class BigqueryStorageWriteSinkTaskTest {
     var sinkRecord =
         new SinkRecord(
             topicName,
-            0,
+            partition,
             Schema.STRING_SCHEMA,
             "key-" + sinkRecordOffset,
             valueSchema,
@@ -105,6 +105,10 @@ class BigqueryStorageWriteSinkTaskTest {
             sinkRecordOffset);
     sinkRecordOffset++;
     return sinkRecord;
+  }
+
+  private SinkRecord buildSinkRecord() {
+    return buildSinkRecord(0);
   }
 
   @Test
@@ -217,5 +221,47 @@ class BigqueryStorageWriteSinkTaskTest {
     assertEquals(Set.of(0L, 1L), task.getCorruptedRowOffsets(topicPartition));
     assertEquals(Set.of(1L), task.getRetryBoundaries(topicPartition));
     assertEquals(0, offsets.get(topicPartition).offset());
+  }
+
+  @Test
+  void testPreCommitWithRevokedPartitions() {
+    setUpTask();
+
+    var revokedTopicPartition = new TopicPartition(topicName, 0);
+    task.close(List.of(revokedTopicPartition));
+
+    var assignedTopicPartition = new TopicPartition(topicName, 1);
+    try (var staticMock = mockStatic(BigqueryStreamWriter.class)) {
+      this.mockedWriter = mock(BigqueryStreamWriter.class);
+      staticMock
+          .when(
+              () ->
+                  BigqueryStreamWriter.create(
+                      "bq_project",
+                      "bq_dataset",
+                      "bq_table",
+                      WriteMode.PENDING,
+                      "/tmp/dummy_key",
+                      1000))
+          .thenReturn(mockedWriter);
+      task.open(List.of(assignedTopicPartition));
+    }
+
+    var records = List.of(buildSinkRecord(1), buildSinkRecord(1));
+    task.put(records);
+
+    var mockedAppendContext = mock(AppendContext.class);
+    when(mockedWriter.write()).thenReturn(Optional.of(mockedAppendContext));
+    var offsets =
+        task.preCommit(
+            Map.of(
+                revokedTopicPartition, new OffsetAndMetadata(2),
+                assignedTopicPartition, new OffsetAndMetadata(2)));
+
+    verify(mockedWriter).write();
+    verify(mockedWriter).commit();
+    verify(mockedWriter, never()).reset();
+    assertTrue(task.getInflightContexts(assignedTopicPartition).isEmpty());
+    assertEquals(2, offsets.get(assignedTopicPartition).offset());
   }
 }

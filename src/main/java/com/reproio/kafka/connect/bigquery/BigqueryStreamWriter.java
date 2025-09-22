@@ -128,7 +128,9 @@ public class BigqueryStreamWriter implements Closeable {
 
     public void setError(Throwable error) {
       this.error = error;
-      this.storageException = Exceptions.toStorageException(error);
+      if (error instanceof StorageException) {
+        this.storageException = (StorageException) error;
+      }
     }
 
     public Code getGrpcStatusCode() {

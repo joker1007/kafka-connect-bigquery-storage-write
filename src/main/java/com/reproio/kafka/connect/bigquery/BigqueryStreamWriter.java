@@ -360,7 +360,7 @@ public class BigqueryStreamWriter implements Closeable {
 
     @Override
     public void onFailure(Throwable t) {
-      log.error("Failed to write rows", t);
+      log.error("Failed to write rows: {}", t.getClass().getName(), t);
       context.setError(t);
       done();
     }

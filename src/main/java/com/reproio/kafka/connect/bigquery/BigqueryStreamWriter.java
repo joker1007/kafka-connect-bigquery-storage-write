@@ -46,6 +46,7 @@ public class BigqueryStreamWriter implements Closeable {
   private final BigQueryWriteClient client;
   private final TableName tableName;
   private final WriteMode writeMode;
+  private final CompressionType compressionType;
 
   private JsonStreamWriter streamWriter;
 
@@ -62,6 +63,22 @@ public class BigqueryStreamWriter implements Closeable {
     COMMITTED;
   }
 
+  public enum CompressionType {
+    NONE(null),
+    GZIP("gzip");
+
+    @Nullable private final String compressorName;
+
+    CompressionType(@Nullable String compressorName) {
+      this.compressorName = compressorName;
+    }
+
+    @Nullable
+    public String getCompressorName() {
+      return compressorName;
+    }
+  }
+
   @SneakyThrows
   public static BigqueryStreamWriter create(
       String project,
@@ -69,7 +86,8 @@ public class BigqueryStreamWriter implements Closeable {
       String table,
       WriteMode writeMode,
       String keyfile,
-      int bufferSize) {
+      int bufferSize,
+      CompressionType compressionType) {
     var keyFileStream = new FileInputStream(keyfile);
     var writeSettings =
         BigQueryWriteSettings.newBuilder()
@@ -77,7 +95,8 @@ public class BigqueryStreamWriter implements Closeable {
                 FixedCredentialsProvider.create(GoogleCredentials.fromStream(keyFileStream)))
             .build();
     var client = BigQueryWriteClient.create(writeSettings);
-    return new BigqueryStreamWriter(project, dataset, table, writeMode, bufferSize, client);
+    return new BigqueryStreamWriter(
+        project, dataset, table, writeMode, bufferSize, compressionType, client);
   }
 
   @VisibleForTesting
@@ -88,9 +107,22 @@ public class BigqueryStreamWriter implements Closeable {
       WriteMode writeMode,
       int bufferSize,
       BigQueryWriteClient client) {
+    this(project, dataset, table, writeMode, bufferSize, CompressionType.NONE, client);
+  }
+
+  @VisibleForTesting
+  public BigqueryStreamWriter(
+      String project,
+      String dataset,
+      String table,
+      WriteMode writeMode,
+      int bufferSize,
+      CompressionType compressionType,
+      BigQueryWriteClient client) {
     this.tableName = TableName.of(project, dataset, table);
     this.writeMode = writeMode;
     this.bufferSize = bufferSize;
+    this.compressionType = compressionType;
     this.client = client;
   }
 
@@ -203,10 +235,13 @@ public class BigqueryStreamWriter implements Closeable {
             .build();
     WriteStream writeStream = client.createWriteStream(createWriteStreamRequest);
 
-    this.streamWriter =
+    var builder =
         JsonStreamWriter.newBuilder(writeStream.getName(), writeStream.getTableSchema(), client)
-            .setIgnoreUnknownFields(true)
-            .build();
+            .setIgnoreUnknownFields(true);
+    if (compressionType.getCompressorName() != null) {
+      builder.setCompressorName(compressionType.getCompressorName());
+    }
+    this.streamWriter = builder.build();
     this.currentOffset = 0;
   }
 

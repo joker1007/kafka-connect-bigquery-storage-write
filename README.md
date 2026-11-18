@@ -14,6 +14,9 @@ This is an implementation of a sink connector from [Apache Kafka](http://kafka.a
 | keyfile     | string                          | true     |           | The filepath of a JSON key with BigQuery service account credentials                              |
 | write.mode  | enum (`commtted` or `pending` ) | false    | committed | This value set stream mode (see [BigQuery Doc](https://cloud.google.com/bigquery/docs/write-api)) |
 | buffer.size | int                             | false    | 1000      | The number of records kept in buffer before transport                                             |
+| compression.type | enum (`none` or `gzip`)    | false    | none      | The gRPC compression for requests sent to the Storage Write API. `gzip` reduces network traffic at the cost of CPU |
+
+NOTE: `compression.type=gzip` requires the server to accept gzip-compressed requests. BigQuery supports it, but some emulators (e.g. [bigquery-emulator](https://github.com/goccy/bigquery-emulator)) reject them with `UNIMPLEMENTED`, which is treated as an unretryable error.
 
 ## Example
 

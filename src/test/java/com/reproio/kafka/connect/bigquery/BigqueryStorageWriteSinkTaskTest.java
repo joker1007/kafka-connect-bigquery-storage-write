@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.AppendContext;
+import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.CompressionType;
 import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.WriteMode;
 import java.util.HashMap;
 import java.util.List;
@@ -70,7 +71,8 @@ class BigqueryStorageWriteSinkTaskTest {
                       "bq_table",
                       WriteMode.PENDING,
                       "/tmp/dummy_key",
-                      1000))
+                      1000,
+                      CompressionType.NONE))
           .thenReturn(mockedWriter);
       task.open(topicPartitions);
     }
@@ -87,6 +89,36 @@ class BigqueryStorageWriteSinkTaskTest {
     var task = new BigqueryStorageWriteSinkTask();
     var config = Map.of("dataset", "bq_dataset", "table", "bq_table", "keyfile", "/tmp/dummy_key");
     assertThrows(ConfigException.class, () -> task.start(config));
+  }
+
+  @Test
+  void testWithInvalidCompressionType() {
+    var task = new BigqueryStorageWriteSinkTask();
+    var config = new HashMap<>(VALID_CONFIG);
+    config.put("compression.type", "zstd");
+    assertThrows(ConfigException.class, () -> task.start(config));
+  }
+
+  @Test
+  void testOpenWithGzipCompression() {
+    var task = new BigqueryStorageWriteSinkTask();
+    task.initialize(mock(SinkTaskContext.class));
+    var config = new HashMap<>(VALID_CONFIG);
+    config.put("compression.type", "gzip");
+    task.start(config);
+    try (var staticMock = mockStatic(BigqueryStreamWriter.class)) {
+      task.open(List.of(new TopicPartition(topicName, 0)));
+      staticMock.verify(
+          () ->
+              BigqueryStreamWriter.create(
+                  "bq_project",
+                  "bq_dataset",
+                  "bq_table",
+                  WriteMode.PENDING,
+                  "/tmp/dummy_key",
+                  1000,
+                  CompressionType.GZIP));
+    }
   }
 
   private SinkRecord buildSinkRecord(int partition) {
@@ -242,7 +274,8 @@ class BigqueryStorageWriteSinkTaskTest {
                       "bq_table",
                       WriteMode.PENDING,
                       "/tmp/dummy_key",
-                      1000))
+                      1000,
+                      CompressionType.NONE))
           .thenReturn(mockedWriter);
       task.open(List.of(assignedTopicPartition));
     }

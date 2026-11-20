@@ -3,7 +3,11 @@ package com.reproio.kafka.connect.bigquery;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.RETURNS_SELF;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
@@ -14,10 +18,14 @@ import com.google.cloud.bigquery.storage.v1.AppendRowsResponse;
 import com.google.cloud.bigquery.storage.v1.BatchCommitWriteStreamsRequest;
 import com.google.cloud.bigquery.storage.v1.BatchCommitWriteStreamsResponse;
 import com.google.cloud.bigquery.storage.v1.BigQueryWriteClient;
+import com.google.cloud.bigquery.storage.v1.CreateWriteStreamRequest;
 import com.google.cloud.bigquery.storage.v1.Exceptions.AppendSerializtionError;
 import com.google.cloud.bigquery.storage.v1.FinalizeWriteStreamResponse;
 import com.google.cloud.bigquery.storage.v1.JsonStreamWriter;
+import com.google.cloud.bigquery.storage.v1.TableSchema;
+import com.google.cloud.bigquery.storage.v1.WriteStream;
 import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.AppendContext;
+import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.CompressionType;
 import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.WriteMode;
 import java.util.List;
 import java.util.Map;
@@ -253,5 +261,63 @@ class BigqueryStreamWriterTest {
     verify(mockedClient, never())
         .batchCommitWriteStreams(any(BatchCommitWriteStreamsRequest.class));
     verify(mockedStreamWriter, never()).close();
+  }
+
+  @SneakyThrows
+  private JsonStreamWriter.Builder writeWithMockedBuilder(BigqueryStreamWriter writer) {
+    var writeStream =
+        WriteStream.newBuilder()
+            .setName("stream-name")
+            .setTableSchema(TableSchema.getDefaultInstance())
+            .build();
+    when(mockedClient.createWriteStream(any(CreateWriteStreamRequest.class)))
+        .thenReturn(writeStream);
+    var mockedBuilder = mock(JsonStreamWriter.Builder.class, RETURNS_SELF);
+    var streamWriter = mock(JsonStreamWriter.class);
+    when(streamWriter.getStreamName()).thenReturn("stream-name");
+    when(streamWriter.append(any(), anyLong())).thenReturn(SettableApiFuture.create());
+    when(mockedBuilder.build()).thenReturn(streamWriter);
+
+    try (var staticMock = mockStatic(JsonStreamWriter.class)) {
+      staticMock
+          .when(
+              () ->
+                  JsonStreamWriter.newBuilder(
+                      eq("stream-name"), any(TableSchema.class), eq(mockedClient)))
+          .thenReturn(mockedBuilder);
+      writer.appendRecord(buildSinkRecord());
+      writer.write();
+    }
+    return mockedBuilder;
+  }
+
+  @Test
+  void testWriteWithoutCompression() {
+    this.mockedClient = mock(BigQueryWriteClient.class);
+    var writer =
+        new BigqueryStreamWriter(
+            "bq_project", "bq_dataset", "bq_table", WriteMode.COMMITTED, 1000, mockedClient);
+
+    var mockedBuilder = writeWithMockedBuilder(writer);
+
+    verify(mockedBuilder, never()).setCompressorName(anyString());
+  }
+
+  @Test
+  void testWriteWithGzipCompression() {
+    this.mockedClient = mock(BigQueryWriteClient.class);
+    var writer =
+        new BigqueryStreamWriter(
+            "bq_project",
+            "bq_dataset",
+            "bq_table",
+            WriteMode.COMMITTED,
+            1000,
+            CompressionType.GZIP,
+            mockedClient);
+
+    var mockedBuilder = writeWithMockedBuilder(writer);
+
+    verify(mockedBuilder).setCompressorName("gzip");
   }
 }

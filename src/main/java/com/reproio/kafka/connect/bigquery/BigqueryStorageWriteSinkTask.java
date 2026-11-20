@@ -2,6 +2,7 @@ package com.reproio.kafka.connect.bigquery;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.AppendContext;
+import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.CompressionType;
 import com.reproio.kafka.connect.bigquery.BigqueryStreamWriter.WriteMode;
 import com.reproio.kafka.connect.bigquery.utils.Version;
 import java.util.ArrayList;
@@ -59,10 +60,14 @@ public class BigqueryStorageWriteSinkTask extends SinkTask {
         WriteMode.valueOf(
             config.getString(BigqueryStreamWriteSinkConfig.WRITE_MODE_CONFIG).toUpperCase());
     var bufferSize = config.getInt(BigqueryStreamWriteSinkConfig.BUFFER_SIZE_CONFIG);
+    var compressionType =
+        CompressionType.valueOf(
+            config.getString(BigqueryStreamWriteSinkConfig.COMPRESSION_TYPE_CONFIG).toUpperCase());
     partitions.forEach(
         topicPartition -> {
           var writer =
-              BigqueryStreamWriter.create(project, dataset, table, writeMode, keyfile, bufferSize);
+              BigqueryStreamWriter.create(
+                  project, dataset, table, writeMode, keyfile, bufferSize, compressionType);
           topicPartitionWriters.put(topicPartition, writer);
         });
     closed = false;

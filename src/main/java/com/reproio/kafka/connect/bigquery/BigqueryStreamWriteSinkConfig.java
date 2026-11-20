@@ -40,6 +40,15 @@ public class BigqueryStreamWriteSinkConfig extends AbstractConfig {
   private static final String BUFFER_SIZE_DOC =
       "The maximum number of records to buffer per topic partition";
 
+  public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
+  public static final String COMPRESSION_TYPE_DEFAULT = "none";
+  private static final ConfigDef.Type COMPRESSION_TYPE_TYPE = Type.STRING;
+  private static final ConfigDef.Importance COMPRESSION_TYPE_IMPORTANCE = Importance.LOW;
+  private static final ConfigDef.Validator COMPRESSION_TYPE_VALIDATOR =
+      ConfigDef.CaseInsensitiveValidString.in("none", "gzip");
+  private static final String COMPRESSION_TYPE_DOC =
+      "The compression type for requests sent to the Storage Write API (none or gzip)";
+
   protected BigqueryStreamWriteSinkConfig(ConfigDef definition, Map<?, ?> originals) {
     super(definition, originals);
   }
@@ -65,6 +74,13 @@ public class BigqueryStreamWriteSinkConfig extends AbstractConfig {
             BUFFER_SIZE_TYPE,
             BUFFER_SIZE_DEFAULT,
             BUFFER_SIZE_IMPORTANCE,
-            BUFFER_SIZE_DOC);
+            BUFFER_SIZE_DOC)
+        .define(
+            COMPRESSION_TYPE_CONFIG,
+            COMPRESSION_TYPE_TYPE,
+            COMPRESSION_TYPE_DEFAULT,
+            COMPRESSION_TYPE_VALIDATOR,
+            COMPRESSION_TYPE_IMPORTANCE,
+            COMPRESSION_TYPE_DOC);
   }
 }
